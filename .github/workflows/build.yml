@@ -1,0 +1,40 @@
+name: Build VST3 (Windows)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure CMake (pulls JUCE 7.0.12 via FetchContent)
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build (Release)
+        run: cmake --build build --config Release --target DelayVST_VST3 --parallel
+
+      - name: Locate the built .vst3 bundle
+        shell: pwsh
+        run: |
+          $vst3 = Get-ChildItem -Path build -Recurse -Filter "*.vst3" -Directory | Select-Object -First 1
+          if (-not $vst3) {
+            Write-Error "No .vst3 bundle was found under build/ - the build likely failed."
+            exit 1
+          }
+          Write-Host "Found VST3 bundle at $($vst3.FullName)"
+          echo "VST3_PATH=$($vst3.FullName)" >> $env:GITHUB_ENV
+
+      - name: Upload VST3 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Delay-VST3-Windows
+          path: ${{ env.VST3_PATH }}
+          if-no-files-found: error
